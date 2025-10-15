@@ -210,7 +210,7 @@ def build_command():
 
     # TEST CASE
     docs_with_merida = index.index["merida"]
-    print(f"First document for token 'merida' = {list(docs_with_merida[0])}")
+    print(f"First document for token 'merida' = {list(docs_with_merida)[0]}")
 
 def get_tf_command(doc_id, term):
     """
