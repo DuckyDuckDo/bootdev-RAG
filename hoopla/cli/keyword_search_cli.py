@@ -1,4 +1,3 @@
-from InvertedIndex import *
 from utils import *
 
 def main() -> None:
@@ -13,24 +12,13 @@ def main() -> None:
         case "search":
             print(f"Searching for: {args.query}")
             # matching_movies = keyword_search_by_title(args.query)
-            index = InvertedIndex()
-            try:
-                index.load()
-            except:
-                raise Exception("Could not load index")
-        
-            matching_movies = keyword_search_by_inverted_index(args.query, index)
+            matching_movies = keyword_search_by_inverted_index(args.query)
             for title in (matching_movies):
                 print(title)
         
         case "build":
             print(f"Building Inverted Index for all movies")
-            index_class = InvertedIndex()
-            index_class.build()
-            index_class.save()    
-            # Test Case
-            docs_with_merida = index_class.index["merida"]
-            print(f"First document for token 'merida' = {docs_with_merida[0]}")
+            build_command()
 
         case _:
             parser.print_help()

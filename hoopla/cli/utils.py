@@ -2,12 +2,72 @@ import json
 import argparse
 import string
 from nltk.stem import PorterStemmer
-from InvertedIndex import *
+import os
+import pickle
+import json
 
+
+######## Inverted Index Class ##########
+class InvertedIndex:
+    def __init__(self):
+        self.index = {} # Dictionary that maps tokens to an array of documents
+        self.docmap = {}# Dictionary that maps document ids to their objects
+    
+    def __add_document(self, doc_id, text):
+        """
+        Add all text of a document into the index
+        """
+        tokens = tokenize(text)
+        for token in tokens:
+            if token not in self.index:
+                self.index[token] = []
+            self.index[token].append(doc_id)
+
+    def get_documents(self, term):
+        """
+        Retrieves the document list if the term exists in index
+        """
+        term = term.lower()
+        return sorted(self.index.get(term, []))
+
+    def build(self):
+        with open(DATA_PATH, "r") as f:
+            data = json.load(f)
+            movies = data["movies"]
+        
+        for i, movie in enumerate(movies):
+            input_text = f"{movie["title"]} {movie["description"]}"
+            self.docmap[i+1] = movie
+            self.__add_document(i+1, input_text)
+
+    def save(self):
+        save_path = "./cache/"
+        if not os.path.isdir(save_path):
+            os.mkdir(save_path)
+
+        index_file = "./cache/index.pkl"
+        docmap_file = "./cache/docmap.pkl"
+
+        with open(index_file, 'wb') as file:
+            pickle.dump(self.index, file, protocol = pickle.HIGHEST_PROTOCOL)
+        with open(docmap_file, 'wb') as file:
+            pickle.dump(self.docmap, file, protocol = pickle.HIGHEST_PROTOCOL)
+    
+    def load(self):
+        try:
+            with open("./cache/index.pkl", "rb") as file:
+                self.index = pickle.load(file)
+            with open("./cache/docmap.pkl", "rb") as file:
+                self.docmap = pickle.load(file)
+        except:
+            raise Exception("Cache files not found/does not exist, build up a new index first")
+        
+###### CONSTANTS #######
 DATA_PATH = "./data/movies.json"
 SEARCH_LIMIT = 5
 STOP_WORDS_PATH = "./data/stopwords.txt"
 
+###### Helper Functions for Tokenization ########
 def translate_and_lower(text):
     """
     Gets rid of punctuation in text and lower cases the text
@@ -69,6 +129,7 @@ def tokenize(text):
     tokens = stem_tokens(remove_stop_words(tokens))
     return tokens
 
+######## Commands called from CLI ############
 def keyword_search_by_title(query):
     """
     Opens and loads all the movie data and returns title based on search query and only returns exact matches   
@@ -91,13 +152,17 @@ def keyword_search_by_title(query):
             return results
     return results
 
-def keyword_search_by_inverted_index(query, index):
+def keyword_search_by_inverted_index(query):
     """
     Searches for movies through each query token using inverted index
     """
+    index = InvertedIndex()
+    try:
+        index.load()
+    except:
+        raise Exception("Could not load index")
     query_tokens = tokenize(query)
     results = set()
-
     # Loops through each token in query
     for token in query_tokens:
         # Gets all documents containing the token
@@ -108,3 +173,15 @@ def keyword_search_by_inverted_index(query, index):
             results.add(index.docmap[doc]["title"])
 
     return results
+
+def build_command():
+    """
+    Builds out the inverted index with a test case to verify should return document 4651
+    """
+    index = InvertedIndex()
+    index.build()
+    index.save()
+
+    # TEST CASE
+    docs_with_merida = index.index["merida"]
+    print(f"First document for token 'merida' = {docs_with_merida[0]}")
