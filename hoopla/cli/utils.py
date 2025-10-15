@@ -5,40 +5,60 @@ from nltk.stem import PorterStemmer
 import os
 import pickle
 import json
+import math
+from collections import defaultdict
 
 
 ######## Inverted Index Class ##########
 class InvertedIndex:
     def __init__(self):
-        self.index = {} # Dictionary that maps tokens to an array of documents
-        self.docmap = {}# Dictionary that maps document ids to their objects
+        self.index = defaultdict(set)  # Dictionary that maps tokens to docs they appear in
+        self.docmap: dict[int, dict] = {}# Dictionary that maps document ids to their objects
+        self.term_frequencies = {}# Dictionary of dictionaries mapping document id to a frequency dictionary of the tokens in that document
     
     def __add_document(self, doc_id, text):
         """
         Add all text of a document into the index
         """
         tokens = tokenize(text)
-        for token in tokens:
-            if token not in self.index:
-                self.index[token] = []
-            self.index[token].append(doc_id)
+        self.term_frequencies[doc_id] = {}
+        for token in set(tokens):
+            self.index[token].add(doc_id)
+            self.term_frequencies[doc_id][token] = self.term_frequencies[doc_id].get(token, 0) + 1
 
     def get_documents(self, term):
         """
         Retrieves the document list if the term exists in index
         """
         term = term.lower()
-        return sorted(self.index.get(term, []))
+        return sorted(self.index.get(term, set()))
+
+    def get_tf(self, doc_id, term):
+        tokens = tokenize(term)
+        if len(tokens) != 1:
+            raise ValueError("term must be a single token")
+        token = tokens[0]
+        return self.term_frequencies[doc_id][token]
+    
+    def get_idf(self, term):
+        tokens = tokenize(term)
+        if len(tokens) != 1:
+            raise ValueError("term must be a single token")
+        token = tokens[0]
+        doc_count = len(self.docmap)
+        term_doc_count = len(self.index[token])
+        return math.log((doc_count + 1) / (term_doc_count + 1))
 
     def build(self):
         with open(DATA_PATH, "r") as f:
             data = json.load(f)
             movies = data["movies"]
         
-        for i, movie in enumerate(movies):
-            input_text = f"{movie["title"]} {movie["description"]}"
-            self.docmap[i+1] = movie
-            self.__add_document(i+1, input_text)
+        for m in movies:
+            doc_id = m["id"]
+            doc_description = f"{m['title']} {m['description']}"
+            self.docmap[doc_id] = m
+            self.__add_document(doc_id, doc_description)
 
     def save(self):
         save_path = "./cache/"
@@ -47,11 +67,15 @@ class InvertedIndex:
 
         index_file = "./cache/index.pkl"
         docmap_file = "./cache/docmap.pkl"
+        tf_file = "./cache/term_frequencies.pkl"
 
         with open(index_file, 'wb') as file:
             pickle.dump(self.index, file, protocol = pickle.HIGHEST_PROTOCOL)
         with open(docmap_file, 'wb') as file:
             pickle.dump(self.docmap, file, protocol = pickle.HIGHEST_PROTOCOL)
+        with open(tf_file, "wb") as file:
+            pickle.dump(self.term_frequencies, file, protocol = pickle.HIGHEST_PROTOCOL)
+        
     
     def load(self):
         try:
@@ -59,6 +83,8 @@ class InvertedIndex:
                 self.index = pickle.load(file)
             with open("./cache/docmap.pkl", "rb") as file:
                 self.docmap = pickle.load(file)
+            with open("./cache/term_frequencies.pkl", "rb") as file:
+                self.term_frequencies = pickle.load(file)
         except:
             raise Exception("Cache files not found/does not exist, build up a new index first")
         
@@ -184,4 +210,24 @@ def build_command():
 
     # TEST CASE
     docs_with_merida = index.index["merida"]
-    print(f"First document for token 'merida' = {docs_with_merida[0]}")
+    print(f"First document for token 'merida' = {list(docs_with_merida[0])}")
+
+def get_tf_command(doc_id, term):
+    """
+    Gets term frequency from a given doc_id and term
+    """
+    index = InvertedIndex()
+    try:
+        index.load()
+    except:
+        raise Exception("Could not load index")
+    return index.term_frequencies[doc_id].get(term, 0)
+
+def idf_command(term):
+    index = InvertedIndex()
+    try:
+        index.load()
+    except:
+        raise Exception("Could not load index")
+    return index.get_idf(term)
+    
