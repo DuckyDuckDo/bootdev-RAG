@@ -2,6 +2,7 @@ import json
 import argparse
 import string
 from nltk.stem import PorterStemmer
+from InvertedIndex import *
 
 DATA_PATH = "./data/movies.json"
 SEARCH_LIMIT = 5
@@ -88,4 +89,22 @@ def keyword_search_by_title(query):
 
         if len(results) >= SEARCH_LIMIT:
             return results
+    return results
+
+def keyword_search_by_inverted_index(query, index):
+    """
+    Searches for movies through each query token using inverted index
+    """
+    query_tokens = tokenize(query)
+    results = set()
+
+    # Loops through each token in query
+    for token in query_tokens:
+        # Gets all documents containing the token
+        docs_with_tokens = index.index.get(token, [])
+        for doc in docs_with_tokens:
+            if len(results) == SEARCH_LIMIT:
+                break
+            results.add(index.docmap[doc]["title"])
+
     return results
