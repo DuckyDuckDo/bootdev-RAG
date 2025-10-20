@@ -15,6 +15,7 @@ class InvertedIndex:
         self.index = defaultdict(set)  # Dictionary that maps tokens to docs they appear in
         self.docmap: dict[int, dict] = {}# Dictionary that maps document ids to their objects
         self.term_frequencies = {}# Dictionary of dictionaries mapping document id to a frequency dictionary of the tokens in that document
+        self.doc_lengths = {}
     
     def __add_document(self, doc_id, text):
         """
@@ -25,6 +26,16 @@ class InvertedIndex:
         for token in (tokens):
             self.index[token].add(doc_id)
             self.term_frequencies[doc_id][token] = self.term_frequencies[doc_id].get(token, 0) + 1
+        self.doc_lengths[doc_id] = len(tokens)
+    
+    def __get_avg_doc_length(self):
+        """
+        Get average document length
+        """
+        if not self.doc_lengths:
+            return 0.0
+        
+        return sum(self.doc_lengths.values()) / len(self.doc_lengths.keys())
 
     def get_documents(self, term):
         """
@@ -60,6 +71,47 @@ class InvertedIndex:
         Calculates TF-IDF
         """
         return self.get_tf(doc_id, term) * self.get_idf(term)
+    
+    def get_bm25tf(self, doc_id, term):
+        """
+        Calculates saturated tf that introduces diminishing returns for repeated occurences of a word
+        """
+        raw_tf = self.get_tf(doc_id, term)
+        length_norm = 1 - BM25_B + BM25_B * (self.doc_lengths[doc_id] / self.__get_avg_doc_length())
+        return (raw_tf * (BM25_K1 + 1) / (raw_tf + BM25_K1 * length_norm))
+
+    def get_bm25idf(self, term):
+        """
+        Calculates BM25 for a specific term
+        """
+        tokens = tokenize(term)
+        if len(tokens) != 1:
+            raise ValueError("term must be a single token")
+        token = tokens[0]
+        doc_count = len(self.docmap)
+        term_doc_count = len(self.index[token])
+        return math.log((doc_count - term_doc_count + 0.5) / (term_doc_count + 0.5) + 1)
+    
+    def get_bm25(self, doc_id, term):
+        """
+        Calculates BM25 for a document or a term
+        """
+        bm25tf = self.get_bm25tf(doc_id, term)
+        bm25idf = self.get_bm25idf(term)
+        return bm25tf * bm25idf
+
+    def bm25search(self, query, limit = 5):
+        """
+        Performs a search of the query across all of the documents and generates a list with top 5 bm25 scores
+        """
+        tokens = tokenize(query)
+        scores = defaultdict(int)
+        for token in tokens:
+            for doc_id in self.get_documents(token):
+                scores[self.docmap[doc_id]['title']] += self.get_bm25(doc_id, token)
+        top_scores = sorted(scores.items(), key = lambda item: item[1], reverse = True)[:limit]
+        return top_scores
+
 
     def build(self):
         """
@@ -86,6 +138,7 @@ class InvertedIndex:
         index_file = "./cache/index.pkl"
         docmap_file = "./cache/docmap.pkl"
         tf_file = "./cache/term_frequencies.pkl"
+        doc_lengths_file = "./cache/doc_lengths.pkl"
 
         with open(index_file, 'wb') as file:
             pickle.dump(self.index, file, protocol = pickle.HIGHEST_PROTOCOL)
@@ -93,7 +146,8 @@ class InvertedIndex:
             pickle.dump(self.docmap, file, protocol = pickle.HIGHEST_PROTOCOL)
         with open(tf_file, "wb") as file:
             pickle.dump(self.term_frequencies, file, protocol = pickle.HIGHEST_PROTOCOL)
-        
+        with open(doc_lengths_file, "wb") as file:
+            pickle.dump(self.doc_lengths, file, protocol = pickle.HIGHEST_PROTOCOL)
     
     def load(self):
         """
@@ -106,6 +160,8 @@ class InvertedIndex:
                 self.docmap = pickle.load(file)
             with open("./cache/term_frequencies.pkl", "rb") as file:
                 self.term_frequencies = pickle.load(file)
+            with open("./cache/doc_lengths.pkl", "rb") as file:
+                self.doc_lengths = pickle.load(file)
         except:
             raise Exception("Cache files not found/does not exist, build up a new index first")
         
@@ -113,6 +169,8 @@ class InvertedIndex:
 DATA_PATH = "./data/movies.json"
 SEARCH_LIMIT = 5
 STOP_WORDS_PATH = "./data/stopwords.txt"
+BM25_K1 = 1.5 # Meant for term frequency saturation parameter
+BM25_B = 0.75 # Parameter for document length 
 
 ###### Helper Functions for Tokenization ########
 def translate_and_lower(text):
@@ -259,3 +317,27 @@ def tf_idf_command(doc_id,term):
     except: 
         raise Exception("Could not load index")
     return index.get_tf_idf(doc_id, term)
+
+def bm25idf_command(term):
+    index = InvertedIndex()
+    try:
+        index.load()
+    except:
+        raise Exception("Could not load index")
+    return index.get_bm25idf(term)
+
+def bm25tf_command(doc_id, term):
+    index = InvertedIndex()
+    try:
+        index.load()
+    except:
+        raise Exception("Could not load index")
+    return index.get_bm25tf(doc_id, term)
+
+def bm25search_command(query, limit = 5):
+    index = InvertedIndex()
+    try:
+        index.load()
+    except:
+        raise Exception("Could not load index")
+    return index.bm25search(query, limit)

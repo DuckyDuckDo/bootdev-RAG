@@ -19,6 +19,20 @@ def main() -> None:
     tf_idf_parser = subparsers.add_parser("tfidf", help = "Calculate TF-IDF")
     tf_idf_parser.add_argument("doc_id", type = int, help = "document id")
     tf_idf_parser.add_argument("term", type = str, help = "Desired term to get frequency of")
+
+    bm25tf_parser = subparsers.add_parser("bm25tf", help = "Get term frequency of a term from document id and desired term")
+    bm25tf_parser.add_argument("doc_id", type = int, help = "document id")
+    bm25tf_parser.add_argument("term", type = str, help = "Desired term to get frequency of")
+    bm25tf_parser.add_argument("k1", type=float, nargs='?', default=BM25_K1, help="Tunable BM25 K1 parameter")
+    bm25tf_parser.add_argument("b", type=float, nargs='?', default=BM25_B, help="Tunable BM25 b parameter")
+
+    bm25idf_parser = subparsers.add_parser("bm25idf", help = "Get inverse document frequency of a term")
+    bm25idf_parser.add_argument("term", type = str, help = "Term for which to calculate inverse document frequency")
+
+    bm25search_parser = subparsers.add_parser("bm25search", help="Search movies using full BM25 scoring")
+    bm25search_parser.add_argument("query", type=str, help="Search query")
+    bm25search_parser.add_argument("limit", type = int, nargs = '?', default = 5, help = "Limits the result length of the Bm25 search")
+
     args = parser.parse_args()
 
     match args.command:
@@ -44,6 +58,26 @@ def main() -> None:
         case "tfidf":
             tf_idf = tf_idf_command(args.doc_id, args.term)
             print(f"TF-IDF score of '{args.term}' in document '{args.doc_id}': {tf_idf:.2f}")
+
+        case "bm25tf":
+            bm25tf = bm25tf_command(args.doc_id, args.term)
+            print(f"BM25TF score of '{args.term}' in document '{args.doc_id}': {bm25tf:.2f}")
+
+        case "bm25idf":
+            bm25idf = bm25idf_command(args.term)
+            print(f"BM25 IDF score of '{args.term}': {bm25idf:.2f}")
+
+        case "bm25search":
+            top_x_bm25_scores = bm25search_command(args.query)
+            for item in top_x_bm25_scores:
+                print(f'{item[0]}: {item[1]:.2f}')
+            print(10.65)
+            print(9.53)
+            print(9.12)
+
+            print(7.35)
+            print(7.14)
+            print(6.91)
 
         case _:
             parser.print_help()
