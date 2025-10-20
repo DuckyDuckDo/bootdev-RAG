@@ -71,13 +71,6 @@ def main() -> None:
             top_x_bm25_scores = bm25search_command(args.query)
             for item in top_x_bm25_scores:
                 print(f'{item[0]}: {item[1]:.2f}')
-            print(10.65)
-            print(9.53)
-            print(9.12)
-
-            print(7.35)
-            print(7.14)
-            print(6.91)
 
         case _:
             parser.print_help()
