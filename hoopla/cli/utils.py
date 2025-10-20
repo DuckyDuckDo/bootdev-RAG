@@ -22,7 +22,7 @@ class InvertedIndex:
         """
         tokens = tokenize(text)
         self.term_frequencies[doc_id] = {}
-        for token in set(tokens):
+        for token in (tokens):
             self.index[token].add(doc_id)
             self.term_frequencies[doc_id][token] = self.term_frequencies[doc_id].get(token, 0) + 1
 
@@ -34,13 +34,19 @@ class InvertedIndex:
         return sorted(self.index.get(term, set()))
 
     def get_tf(self, doc_id, term):
+        """
+        Calculates term frequency within a document for a term
+        """
         tokens = tokenize(term)
         if len(tokens) != 1:
             raise ValueError("term must be a single token")
         token = tokens[0]
-        return self.term_frequencies[doc_id][token]
+        return self.term_frequencies[doc_id].get(token, 0)
     
     def get_idf(self, term):
+        """
+        Calculates inverse document frequency within a document for a term
+        """
         tokens = tokenize(term)
         if len(tokens) != 1:
             raise ValueError("term must be a single token")
@@ -48,8 +54,17 @@ class InvertedIndex:
         doc_count = len(self.docmap)
         term_doc_count = len(self.index[token])
         return math.log((doc_count + 1) / (term_doc_count + 1))
+    
+    def get_tf_idf(self, doc_id, term):
+        """
+        Calculates TF-IDF
+        """
+        return self.get_tf(doc_id, term) * self.get_idf(term)
 
     def build(self):
+        """
+        Method to build out the index based on the DATA_PATH
+        """
         with open(DATA_PATH, "r") as f:
             data = json.load(f)
             movies = data["movies"]
@@ -61,6 +76,9 @@ class InvertedIndex:
             self.__add_document(doc_id, doc_description)
 
     def save(self):
+        """
+        Method to save the index of the movies path into pickle files
+        """
         save_path = "./cache/"
         if not os.path.isdir(save_path):
             os.mkdir(save_path)
@@ -78,6 +96,9 @@ class InvertedIndex:
         
     
     def load(self):
+        """
+        Method to load the index if we have the pickle files ready to go
+        """
         try:
             with open("./cache/index.pkl", "rb") as file:
                 self.index = pickle.load(file)
@@ -212,7 +233,7 @@ def build_command():
     docs_with_merida = index.index["merida"]
     print(f"First document for token 'merida' = {list(docs_with_merida)[0]}")
 
-def get_tf_command(doc_id, term):
+def tf_command(doc_id, term):
     """
     Gets term frequency from a given doc_id and term
     """
@@ -221,7 +242,7 @@ def get_tf_command(doc_id, term):
         index.load()
     except:
         raise Exception("Could not load index")
-    return index.term_frequencies[doc_id].get(term, 0)
+    return index.get_tf(doc_id, term)
 
 def idf_command(term):
     index = InvertedIndex()
@@ -230,4 +251,11 @@ def idf_command(term):
     except:
         raise Exception("Could not load index")
     return index.get_idf(term)
-    
+
+def tf_idf_command(doc_id,term):
+    index = InvertedIndex()
+    try:
+        index.load()
+    except: 
+        raise Exception("Could not load index")
+    return index.get_tf_idf(doc_id, term)
