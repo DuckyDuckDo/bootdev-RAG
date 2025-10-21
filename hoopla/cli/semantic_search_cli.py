@@ -9,7 +9,14 @@ def main():
     embed_text_parser = subparsers.add_parser("embed_text", help = "Embed the text into a vector space using preloaded model")
     embed_text_parser.add_argument("text", help = "Text of which we want to generate embedding for")
 
-    verify_embedding_parser = subparsers.add_parser("verify_embeddings", help = "Verifies that the model has proper embeddings for our movies")
+    subparsers.add_parser("verify_embeddings", help = "Verifies that the model has proper embeddings for our movies")
+
+    embed_query_parser = subparsers.add_parser("embedquery", help = "Embeds the search query for similarity matching")
+    embed_query_parser.add_argument("query", help = "query for which the model can get embedding for")
+
+    search_parser = subparsers.add_parser("search", help = "command to perform a search on the embeddings")
+    search_parser.add_argument("query", help = "text of which to search for matches")
+    search_parser.add_argument("--limit", type = int, nargs = '?', default = 5, help = "limit for the number of movies returned")
 
     args = parser.parse_args()
 
@@ -22,6 +29,13 @@ def main():
         
         case "verify_embeddings":
             verify_embeddings()
+
+        case "embedquery":
+            embedquery(args.query)
+        
+        case "search":
+            search(args.query, args.limit)
+
         case _:
             parser.print_help()
 

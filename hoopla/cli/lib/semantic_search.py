@@ -35,6 +35,9 @@ class SemanticSearch:
         return self.embeddings
     
     def load_or_create_embeddings(self, documents):
+        """
+        Either loads in the embeddings of the movies dataset, or calls build_embeddings to create them for first time
+        """
         self.documents = documents
         for document in self.documents:
             self.document_map[document['id']] = document
@@ -47,12 +50,61 @@ class SemanticSearch:
         else:
             return self.build_embeddings(documents)
     
+    def search(self, query, limit):
+        """
+        Performs a search of the query across the embeddings in the model
+        """
+        # Checks for embeddings to exist
+        if len(self.embeddings) == 0:
+            raise ValueError("No embeddings loaded. Call `load_or_create_embeddings` first.")
+
+        # Get the query embedding
+        query_embedding = self.generate_embedding(query)
+
+        # Get the similarity scores, doc_id is decremented b/c movie_id starts at 1, but python indexing is at 0
+        similarity_scores = []
+        for doc in self.documents:
+            similarity_scores.append((cosine_similarity(query_embedding, self.embeddings[doc['id'] - 1]), doc))
+        
+        # Grab the top_x_scores
+        top_x_scores = sorted(similarity_scores, key = lambda x: x[0], reverse = True)
+        final_result = []
+        
+        # Build out the final result
+        for score, doc in top_x_scores:
+            if len(final_result) >= limit:
+                break
+            final_result.append({'score': score, 
+                                 'title': doc['title'], 
+                                 'description': doc['description']
+                                 })
+        return final_result
+        
+
+#### UTIL FUNCTION FOR SIMILARITY MATCHING
+def cosine_similarity(vec1, vec2):
+    dot_product = np.dot(vec1, vec2)
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+
+    return dot_product / (norm1 * norm2)
+    
+# HIGHER LEVEL COMMANDS CALLED ON SEMANTIC SEARCH CLI
 def verify_model():
+    """
+    Checks that the model works
+    """
     semantic_search_model = SemanticSearch()
     print(f"Model loaded: {semantic_search_model}")
     print(f"Max sequence length: {semantic_search_model.model.max_seq_length}")
 
 def embed_text(text):
+    """
+    Similar to embedquery
+    """
     semantic_search_model = SemanticSearch()
     embedding = semantic_search_model.generate_embedding(text)
     print(f"Text: {text}")
@@ -60,6 +112,9 @@ def embed_text(text):
     print(f"Dimensions: {embedding.shape[0]}")
 
 def verify_embeddings():
+    """
+    Called from CLI, checks for embeddings in the dataset
+    """
     semantic_search_model = SemanticSearch()
     with open(DATA_PATH, "r") as f:
         data = json.load(f)
@@ -69,3 +124,22 @@ def verify_embeddings():
     print(f"Number of docs:   {len(movies)}")
     print(f"Embeddings shape: {embeddings.shape[0]} vectors in {embeddings.shape[1]} dimensions")
 
+def embedquery(query):
+    """
+    Embeds the search query which can then be used for similarity matching to the rest of the embedded database
+    """
+    semantic_search_model = SemanticSearch()
+    embedding = semantic_search_model.generate_embedding(query)
+    print(f"Query: {query}")
+    print(f"First 5 dimensions: {embedding[:5]}")
+    print(f"Shape: {embedding.shape}")
+
+def search(query, limit):
+    semantic_search_model = SemanticSearch()
+    with open(DATA_PATH, "r") as f:
+        data = json.load(f)
+        movies = data["movies"]
+    semantic_search_model.load_or_create_embeddings(movies)
+    top_matches = semantic_search_model.search(query, limit)
+    for movie in top_matches:
+        print(f"{movie['title']} (score: {movie['score']})")
