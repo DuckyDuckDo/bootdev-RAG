@@ -2,6 +2,7 @@ from sentence_transformers import SentenceTransformer
 import numpy as np
 import os
 import json
+import re
 
 DATA_PATH = "././data/movies.json"
 
@@ -143,3 +144,69 @@ def search(query, limit):
     top_matches = semantic_search_model.search(query, limit)
     for movie in top_matches:
         print(f"{movie['title']} (score: {movie['score']})")
+
+
+
+### Word sized Chunking
+def fixed_size_chunking(text, chunk_size):
+    """
+    Chunks text with a fixed size
+    """
+    words = text.split()
+    chunks = []
+    for i in range(0, len(words), chunk_size):
+        chunk = " ".join(words[i: i + chunk_size])
+        chunks.append(chunk)
+    return chunks
+
+def overlap_chunking(text, chunk_size, overlap):
+    """
+    Chunking with potential overlap between start and end of each chunk
+    """
+    words = text.split()
+    chunks = []
+
+    # Generate the chunks by looping through indexes which are incremented by chunk_size
+    i = 0
+    while i < len(words) - overlap:
+        chunk = " ".join(words[i: i + chunk_size])
+        chunks.append(chunk)
+        i += chunk_size - overlap
+
+    return chunks
+
+def chunk_text(text, chunk_size, overlap):
+    """
+    Performs the chunking based on the mode we pass in 
+    """
+    print(f"Chunking {len(text)} characters")
+    if not overlap:
+        chunks = fixed_size_chunking(text, chunk_size)
+    else:
+        chunks = overlap_chunking(text, chunk_size, overlap)
+    for i, chunk in enumerate(chunks):
+        print(f"{i+1}. {chunk}")
+
+### Semantic Chunking
+def semantic_chunking(text, max_chunk_size, overlap):   
+    """
+    Semantic chunking based on sentences
+    """
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    i = 0
+    chunks = []
+    while i < len(sentences) - overlap:
+        chunk = " ".join(sentences[i: i + max_chunk_size])
+        chunks.append(chunk)
+        i += max_chunk_size - overlap
+    return chunks
+
+
+def semantic_chunk_text(text, max_chunk_size, overlap):
+    """
+    Calls the semantic chunking function and prints the chunks to the terminal
+    """
+    print(f"Semantically chunking {len(text)} characters")
+    chunks = semantic_chunking(text, max_chunk_size, overlap)
+    for i, chunk in enumerate(chunks):
+        print(f"{i+1}. {chunk}")

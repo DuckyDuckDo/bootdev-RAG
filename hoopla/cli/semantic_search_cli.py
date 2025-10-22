@@ -18,6 +18,16 @@ def main():
     search_parser.add_argument("query", help = "text of which to search for matches")
     search_parser.add_argument("--limit", type = int, nargs = '?', default = 5, help = "limit for the number of movies returned")
 
+    chunk_parser = subparsers.add_parser("chunk", help = "Chunks input text into chunks of input_size")
+    chunk_parser.add_argument("text", help = "Text to chunk")
+    chunk_parser.add_argument("--chunk-size", type = int, nargs = '?', default = 200)
+    chunk_parser.add_argument("--overlap", type = int, nargs = '?', default = 0)
+
+    semantic_chunk_parser = subparsers.add_parser("semantic_chunk", help = "Semantically chunks input text")
+    semantic_chunk_parser.add_argument("text", help = "Text to chunk")
+    semantic_chunk_parser.add_argument("--max-chunk-size", type = int, nargs = '?', default = 200)
+    semantic_chunk_parser.add_argument("--overlap", type = int, nargs = '?', default = 0)
+
     args = parser.parse_args()
 
     match args.command:
@@ -35,6 +45,12 @@ def main():
         
         case "search":
             search(args.query, args.limit)
+        
+        case "chunk":
+            chunk_text(args.text, args.chunk_size, args.overlap)
+        
+        case "semantic_chunk":
+            semantic_chunk_text(args.text, args.max_chunk_size, args.overlap)
 
         case _:
             parser.print_help()
