@@ -28,6 +28,8 @@ def main():
     semantic_chunk_parser.add_argument("--max-chunk-size", type = int, nargs = '?', default = 200)
     semantic_chunk_parser.add_argument("--overlap", type = int, nargs = '?', default = 0)
 
+    subparsers.add_parser("embed_chunks", help = "verify embedding of chunks for Semantic Search")
+
     args = parser.parse_args()
 
     match args.command:
@@ -51,6 +53,9 @@ def main():
         
         case "semantic_chunk":
             semantic_chunk_text(args.text, args.max_chunk_size, args.overlap)
+        
+        case "embed_chunks":
+            embed_chunks()
 
         case _:
             parser.print_help()
