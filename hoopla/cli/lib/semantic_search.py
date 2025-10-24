@@ -137,11 +137,50 @@ class ChunkedSemanticSearch(SemanticSearch):
             # Verifies that they are the same lengths, if not rebuild
             if len(chunk_embeddings) == len(chunk_metadata['chunks']):
                 self.chunk_embeddings = chunk_embeddings
-                self.chunk_metadata = chunk_metadata
+                self.chunk_metadata = chunk_metadata['chunks']
                 return self.chunk_embeddings
         
         else:
             return self.build_chunk_embeddings(documents)
+    
+    def search_chunks(self, query, limit):
+        """
+        Performs a search over all chunks, aggregate total scores by movie_idx and return Top results
+        """
+        query_embedding = self.generate_embedding(query)
+        chunk_scores = [] # List of dictionaries storing chunk meta data and their score
+        
+        # Go through all chunks in chunk embeddings and store chunk_scores
+        for i, chunk_embedding in enumerate(self.chunk_embeddings):
+            chunk_score = {
+                "chunk_idx": self.chunk_metadata[i]["chunk_idx"], 
+                "movie_idx": self.chunk_metadata[i]["movie_idx"],
+                "score": cosine_similarity(query_embedding, chunk_embedding)
+            }
+            chunk_scores.append(chunk_score)
+        
+        movie_scores = {} # maps movie_idx to max score
+        for chunk_score in chunk_scores:
+            # update the movie_scores dictionary with the the max score from all chunks in one movie
+            movie_id = chunk_score["movie_idx"]
+            score = chunk_score["score"]
+            # If new movie, add a score, if existing, update with the max
+            if movie_id not in movie_scores:
+                movie_scores[movie_id] = score
+            else:
+                movie_scores[movie_id] = max(movie_scores[movie_id], score)
+
+        # Sort the results
+        top_results = sorted(movie_scores.items(), key=lambda item: item[1], reverse = True)[:limit]
+        formatted_results = []
+
+        # Map the movie_idx to actual data to get formatted results
+        for movie_id, score in top_results:
+            movie_data = self.document_map[movie_id]
+            title, description = movie_data["title"], movie_data["description"]
+            movie_result = {"id": movie_id, "title": title, "description": description, "score": score}
+            formatted_results.append(movie_result)
+        return formatted_results
 
 #### UTIL FUNCTION FOR SIMILARITY MATCHING
 def cosine_similarity(vec1, vec2):
@@ -253,11 +292,15 @@ def semantic_chunking(text, max_chunk_size, overlap):
     """
     Semantic chunking based on sentences
     """
+    text = text.strip()
+    if not text:
+        return []
     sentences = re.split(r'(?<=[.!?])\s+', text)
     i = 0
     chunks = []
     while i < len(sentences) - overlap:
         chunk = " ".join(sentences[i: i + max_chunk_size])
+        chunk = chunk.strip()
         chunks.append(chunk)
         i += max_chunk_size - overlap
     return chunks
@@ -282,3 +325,17 @@ def embed_chunks():
         movies = data['movies']
     chunk_embeddings = chunk_search.load_or_create_chunk_embeddings(movies)
     print(f"Generated {len(chunk_embeddings)} chunked embeddings")
+
+def search_chunked(query, limit = 10):
+    """
+    Searching Chunked Embeddings for best results
+    """
+    chunk_search_model = ChunkedSemanticSearch()
+    with open(DATA_PATH, "r") as f:
+        data = json.load(f)
+        movies = data["movies"]
+    chunk_search_model.load_or_create_chunk_embeddings(movies)
+
+    top_matches = chunk_search_model.search_chunks(query, limit)
+    for i, movie in enumerate(top_matches):
+        print(f"{i+1}. {movie['title']} {movie["id"]} (score: {movie['score']:.4f})")

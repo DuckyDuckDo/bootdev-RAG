@@ -30,6 +30,10 @@ def main():
 
     subparsers.add_parser("embed_chunks", help = "verify embedding of chunks for Semantic Search")
 
+    search_chunked_parser = subparsers.add_parser("search_chunked", help = "command to perform a search on the embeddings")
+    search_chunked_parser.add_argument("query", help = "text of which to search for matches")
+    search_chunked_parser.add_argument("--limit", type = int, nargs = '?', default = 10, help = "limit for the number of movies returned")
+
     args = parser.parse_args()
 
     match args.command:
@@ -57,6 +61,8 @@ def main():
         case "embed_chunks":
             embed_chunks()
 
+        case "search_chunked":
+            search_chunked(args.query, args.limit)
         case _:
             parser.print_help()
 
