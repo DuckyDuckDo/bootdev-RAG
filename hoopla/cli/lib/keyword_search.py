@@ -102,13 +102,14 @@ class InvertedIndex:
 
     def bm25search(self, query, limit = 5):
         """
-        Performs a search of the query across all of the documents and generates a list with top 5 bm25 scores
+        Performs a search of the query across all of the documents and generates a list of tuples with (id, score) pairs 
+        with top 5 bm25 scores
         """
         tokens = tokenize(query)
         scores = defaultdict(int)
         for token in tokens:
             for doc_id in self.get_documents(token):
-                scores[self.docmap[doc_id]['title']] += self.get_bm25(doc_id, token)
+                scores[doc_id] += self.get_bm25(doc_id, token)
         top_scores = sorted(scores.items(), key = lambda item: item[1], reverse = True)[:limit]
         return top_scores
 

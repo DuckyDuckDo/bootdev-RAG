@@ -146,6 +146,7 @@ class ChunkedSemanticSearch(SemanticSearch):
     def search_chunks(self, query, limit):
         """
         Performs a search over all chunks, aggregate total scores by movie_idx and return Top results
+        Returns a [] of {}
         """
         query_embedding = self.generate_embedding(query)
         chunk_scores = [] # List of dictionaries storing chunk meta data and their score

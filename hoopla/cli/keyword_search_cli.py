@@ -1,4 +1,4 @@
-from utils import *
+from hoopla.cli.lib.keyword_search import *
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Keyword Search CLI")
