@@ -3,6 +3,7 @@ from lib.semantic_search import ChunkedSemanticSearch
 import os
 from google import genai
 from dotenv import load_dotenv
+import time
 
 load_dotenv()
 API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -67,17 +68,17 @@ class HybridSearch:
     def get_rrf_score(self, rank, k):
         return 1 / (rank + k)
 
-    def rrf_search(self, query, k, limit=10):
+    def rrf_search(self, query, k, limit=10, rerank = False):
         """
         Performs hybrid search but with the reciprocal rank fusion (RRF) metric to order scores instead of normalization. 
         Returns an [] of {} with top search results
         """
         # Call BM25 and Semantic
-        top_bm_scores = self.idx.bm25search(query, limit * 500) # array of [(id, score)] pairs
-        top_semantic_scores = self.semantic_search.search_chunks(query, limit * 500) # array of dictionaries with id, score, description, title
+        top_bm_scores = self.idx.bm25search(query, limit * 5) # array of [(id, score)] pairs
+        top_semantic_scores = self.semantic_search.search_chunks(query, limit * 5) # array of dictionaries with id, score, description, title
        
         # Initialize the Mapping
-        rrf_score_mapping = {i + 1: 0 for i in range(len(self.documents))} # maps movie id to a dictionary of their scores
+        rrf_score_mapping = {i + 1: 0 for i in range(len(self.documents))} # maps   movie id to a dictionary of their scores
 
         bm_rrfs = [(item[0], self.get_rrf_score(i + 1, k)) for i, item in enumerate(top_bm_scores)]
         semantic_rrfs = [(movie["id"], self.get_rrf_score(i + 1, k)) for i, movie in enumerate(top_semantic_scores)]
@@ -99,8 +100,17 @@ class HybridSearch:
                 "score": rrf_score_mapping[id]
             }
             results.append(movie_result)
-        results = sorted(results, key=lambda d: d['score'], reverse = True)[:limit]
-        return results
+        results = sorted(results, key=lambda d: d['score'], reverse = True)[:limit*5]
+
+        # If reranking is selected, rerank calling rerank_results which leads to LLM generation
+        if rerank == "individual":
+            results = sorted(individual_rerank_results(query, results), key = lambda d: d["score"], reverse = True)
+
+        if rerank == "batch":
+            results = batch_rerank_results(query, results)
+
+
+        return results[:limit]
 
 
 
@@ -130,12 +140,12 @@ def weighted_search_command(query, alpha = 0.5, limit = 5):
         print(f"Hybrid Score: {movie_data["hybrid"]:.4f}")
         print(f"BM25: {movie_data["BM25"]:.4f}, Semantic: {movie_data["Semantic"]:.4f}")
     
-def rrf_search_command(query, k = 60, limit = 5):
+def rrf_search_command(query, k = 60, limit = 5, rerank = False):
     with open(DATA_PATH, "r") as f:
         data = json.load(f)
         movies = data["movies"]
     hybrid_search = HybridSearch(movies)
-    top_search_results = hybrid_search.rrf_search(query, k, limit)
+    top_search_results = hybrid_search.rrf_search(query, k, limit, rerank)
     for i, movie_data in enumerate(top_search_results):
         print(f"{i+1}. {movie_data["title"]}")
         print(f"RRF Score: {movie_data["score"]:.4f}")
@@ -201,3 +211,62 @@ def expand_query(query):
                         Query: "{query}"""
     )
     return response.text.strip("\n")
+
+def individual_rerank_results(query, rrf_results):
+    """
+    Calls Google Gemini Model to rerank search results if user chooses this option
+    This will mutate rrf_results list of dictionaries with the new score
+    """
+    client = genai.Client(api_key = API_KEY)
+    for movie in rrf_results:
+        response = client.models.generate_content(
+            model = "gemini-2.0-flash-001", 
+            contents = f"""Rate how well this movie matches the search query.
+                        Query: "{query}"
+                        Movie: {movie.get("title", "")} - {movie.get("description", "")}
+                        Consider:
+                        - Direct relevance to query
+                        - User intent (what they're looking for)
+                        - Content appropriateness
+                        Rate 0-10 (10 = perfect match).
+                        Give me ONLY the float number in your response, no other text or explanation.
+                        Score:"""
+        )
+        movie["score"] = float(response.text)
+        print(f"Rescored {movie["title"]}: {movie["score"]}")
+        time.sleep(3)
+
+    return rrf_results
+
+def batch_rerank_results(query, rrf_results):
+    """
+    Calls Google Gemini Model to rerank search results in a big batch.
+    This will return a new list of dictionaries with added field of batch rerank score
+    """
+    client = genai.Client(api_key = API_KEY)
+    response = client.models.generate_content(
+        model = "gemini-2.0-flash-001", 
+        contents = f"""Rank these movies by relevance to the search query.
+
+                    Query: "{query}"
+                    Movies:
+                    {rrf_results}
+
+                    Return ONLY the IDs in order of relevance (best match first). Return a valid JSON object with one field containing a Python list. 
+                    Response: {{
+                    data: [76, 1, 26, 2, 31]
+                    }}
+                    """
+    )
+    cleaned_response = response.text.strip().strip("```")[5:] # Clean the JSON response from Gemini API
+    rankings = json.loads(cleaned_response)['data']
+    ranking_map = {key: i for i, key in enumerate(rankings)}
+    rrf_results = sorted(rrf_results, key = lambda item: ranking_map[item["id"]]) # Sort results based on the ranking_map from AI Reranking
+    return rrf_results
+
+def cross_encoder_rerank_results(query, rrf_results):
+    """
+    Performs a cross encoder similarity match which compares two sentences and gives a relevance score. In our case
+    we measure relevance between user query and movie title + description
+    """
+    pass

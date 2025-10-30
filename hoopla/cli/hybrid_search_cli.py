@@ -24,6 +24,12 @@ def main() -> None:
         choices=["spell", "rewrite", "expand"],
         help="Query enhancement method",
     )
+    rrf_parser.add_argument(
+        "--rerank-method",
+        type=str,
+        choices=["individual", "batch"],
+        help="LLM Rerank Method",
+    )
 
     args = parser.parse_args()
 
@@ -36,6 +42,7 @@ def main() -> None:
 
         case "rrf-search":
             method = args.enhance
+            rerank_method = args.rerank_method
             # Based on different ways to enhance search query, perform different AI calls/functions
             # Then performs the rrf_search on the new query
             match method:
@@ -43,22 +50,22 @@ def main() -> None:
                     enhanced_query = spellcheck_query(args.query)
                     if enhanced_query != args.query:
                         print( f"Enhanced query ({method}): '{args.query}' -> '{enhanced_query}'\n")
-                    rrf_search_command(enhanced_query, args.k, args.limit)
                 
                 case "rewrite":
                     enhanced_query = rewrite_query(args.query)
                     if enhanced_query != args.query:
                         print( f"Enhanced query ({method}): '{args.query}' -> '{enhanced_query}'\n")
-                    rrf_search_command(enhanced_query, args.k, args.limit)
                 
                 case "expand":
                     enhanced_query = expand_query(args.query)
                     if enhanced_query != args.query:
-                        print( f"Enhanced query ({method}): '{enhanced_query}'\n")
-                    rrf_search_command(enhanced_query, args.k, args.limit)                  
+                        print( f"Enhanced query ({method}): '{enhanced_query}'\n")              
 
                 case _:
-                    rrf_search_command(args.query, args.k, args.limit)
+                    enhanced_query = args.query
+            
+            rrf_search_command(enhanced_query, args.k, args.limit, rerank_method)
+        
         case _:
             parser.print_help()
 
