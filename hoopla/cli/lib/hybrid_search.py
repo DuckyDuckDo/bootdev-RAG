@@ -1,6 +1,12 @@
 from lib.keyword_search import *
 from lib.semantic_search import ChunkedSemanticSearch
 import os
+from google import genai
+from dotenv import load_dotenv
+
+load_dotenv()
+API_KEY = os.environ.get("GEMINI_API_KEY")
+
 
 class HybridSearch:
     def __init__(self, documents):
@@ -134,4 +140,41 @@ def rrf_search_command(query, k = 60, limit = 5):
         print(f"{i+1}. {movie_data["title"]}")
         print(f"RRF Score: {movie_data["score"]:.4f}")
 
-    
+def spellcheck_query(query):
+    """
+    Calls Google Gemini model to enhance the query that we pass in through proper spell-checking
+    """
+    client = genai.Client(api_key = API_KEY)
+    response = client.models.generate_content(
+        model = "gemini-2.0-flash-001", 
+        contents = f"""Fix any spelling errors in this movie search query.
+                        Only correct obvious typos. Don't change correctly spelled words.
+                        Query: "{query}"
+                        If no errors, return the original query.
+                        Corrected:"""
+    )
+    return response.text.strip("\n")
+
+def rewrite_query(query):
+    """
+    Calls Google Gemini model to rewrite vague user queries into more specific ones that the search engine can be more
+    relevant results for
+    """
+    client = genai.Client(api_key = API_KEY)
+    response = client.models.generate_content(
+        model = "gemini-2.0-flash-001", 
+        contents = f"""Rewrite this movie search query to be more specific and searchable.
+                        Original: "{query}"
+                        Consider:
+                        - Common movie knowledge (famous actors, popular films)
+                        - Genre conventions (horror = scary, animation = cartoon)
+                        - Keep it concise (under 10 words)
+                        - It should be a google style search query that's very specific
+                        - Don't use boolean logic
+                        Examples:
+                        - "that bear movie where leo gets attacked" -> "The Revenant Leonardo DiCaprio bear attack"
+                        - "movie about bear in london with marmalade" -> "Paddington London marmalade"
+                        - "scary movie with bear from few years ago" -> "bear horror movie 2015-2020"
+                        Rewritten query:"""
+    )
+    return response.text.strip("\n")
