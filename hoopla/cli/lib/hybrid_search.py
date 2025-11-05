@@ -4,10 +4,12 @@ import os
 from google import genai
 from dotenv import load_dotenv
 import time
+from sentence_transformers import CrossEncoder
 
 load_dotenv()
 API_KEY = os.environ.get("GEMINI_API_KEY")
 
+####### HYBRID SEARCH CLASS ##########
 
 class HybridSearch:
     def __init__(self, documents):
@@ -66,6 +68,9 @@ class HybridSearch:
         return results
 
     def get_rrf_score(self, rank, k):
+        """
+        Formula for getting RRF scores
+        """
         return 1 / (rank + k)
 
     def rrf_search(self, query, k, limit=10, rerank = False):
@@ -102,18 +107,20 @@ class HybridSearch:
             results.append(movie_result)
         results = sorted(results, key=lambda d: d['score'], reverse = True)[:limit*5]
 
-        # If reranking is selected, rerank calling rerank_results which leads to LLM generation
+        # If reranking is selected, rerank calling rerank_results which leads to LLM generation or CrossEncoder model calls
         if rerank == "individual":
             results = sorted(individual_rerank_results(query, results), key = lambda d: d["score"], reverse = True)
 
         if rerank == "batch":
             results = batch_rerank_results(query, results)
+        
+        if rerank == "cross_encoder":
+            results = cross_encoder_rerank_results(query, results)
 
 
         return results[:limit]
 
-
-
+##### COMMANDS MAPPING TO COMMAND LINE ARGUMENTS #######
 def normalize_command(scores):
     """
     Given a list of scores, apply min-max normalization so that bm25 search scores are weighted equally against semantic search scores
@@ -268,5 +275,21 @@ def cross_encoder_rerank_results(query, rrf_results):
     """
     Performs a cross encoder similarity match which compares two sentences and gives a relevance score. In our case
     we measure relevance between user query and movie title + description
+    rrf_results is an array of dictionaries each containing information for the top search results from RRF
     """
-    pass
+    cross_encoder_model = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L2-v2")
+    pairs = []
+    # Generate the inputs for the cross encoder model
+    for movie in rrf_results:
+        pairs.append([query, f"{movie.get('title', '')} - {movie.get('description', '')}"])
+    
+    # Calculate the scores
+    scores = cross_encoder_model.predict(pairs)
+
+    # Populate each movie with its new score
+    for i, movie in enumerate(rrf_results):
+        movie["cross_encoder_score"] = scores[i]
+    
+    # Return the new movie results based on CE score
+    results = sorted(rrf_results, key = lambda d: d["cross_encoder_score"], reverse = True)
+    return results
