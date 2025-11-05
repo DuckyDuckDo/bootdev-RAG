@@ -64,7 +64,8 @@ def main() -> None:
                 case _:
                     enhanced_query = args.query
             
-            rrf_search_command(enhanced_query, args.k, args.limit, rerank_method)
+            rrf_results = rrf_search_command(enhanced_query, args.k, args.limit, rerank_method)
+            format_rrf_results(rrf_results)
         
         case _:
             parser.print_help()

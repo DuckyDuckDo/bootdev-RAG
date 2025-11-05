@@ -8,6 +8,7 @@ from sentence_transformers import CrossEncoder
 
 load_dotenv()
 API_KEY = os.environ.get("GEMINI_API_KEY")
+GOLDEN_DATASET_PATH = "././data/golden_dataset.json"
 
 ####### HYBRID SEARCH CLASS ##########
 
@@ -153,7 +154,10 @@ def rrf_search_command(query, k = 60, limit = 5, rerank = False):
         movies = data["movies"]
     hybrid_search = HybridSearch(movies)
     top_search_results = hybrid_search.rrf_search(query, k, limit, rerank)
-    for i, movie_data in enumerate(top_search_results):
+    return top_search_results
+
+def format_rrf_results(rrf_results):
+    for i, movie_data in enumerate(rrf_results):
         print(f"{i+1}. {movie_data["title"]}")
         print(f"RRF Score: {movie_data["score"]:.4f}")
 
@@ -293,3 +297,51 @@ def cross_encoder_rerank_results(query, rrf_results):
     # Return the new movie results based on CE score
     results = sorted(rrf_results, key = lambda d: d["cross_encoder_score"], reverse = True)
     return results
+
+def evaluate_model(limit):
+    """
+    Performs evaluation of our search models based on a golden data set of test cases
+    """
+    # Receive all test cases from the Golden Dataset 
+    with open(GOLDEN_DATASET_PATH, "r") as f:
+        data = json.load(f)
+        testcases = data["test_cases"]
+
+    eval_results = [] # Array of dictionaries giving the results of each test case
+    
+    # Loop through each testcase and perform evaluation 
+    for testcase in testcases:
+        rrf_results = rrf_search_command(testcase["query"], k = 60, limit = limit)
+        relevant_doc_count = 0
+        for movie in rrf_results:
+            if movie["title"] in testcase["relevant_docs"]:
+                relevant_doc_count += 1
+
+        # Calculate the metrics for each test case
+        precision = relevant_doc_count / len(rrf_results)
+        recall = relevant_doc_count / len(testcase["relevant_docs"])
+        f1 = 2 * (precision*recall) / (precision + recall) if precision > 0 and recall > 0 else 0.0
+
+        # Summarize the results
+        eval_results.append({
+            "query": testcase["query"], 
+            "relevant_docs": testcase["relevant_docs"],
+            "retrieved_docs": [movie["title"] for movie in rrf_results],
+            "precision": precision,
+            "recall": recall, 
+            "f1": f1
+        })
+    
+    return eval_results
+
+def format_eval_results(eval_results, limit):
+    """
+    Takes array of dictionaries of evaluation results for each test case in golden_dataset and prints the results
+    """
+    for testcase in eval_results:
+        print(f"Query: {testcase["query"]}")
+        print(f"Precision@{limit}: {testcase["precision"]:.4f}")
+        print(f"Recall@{limit}: {testcase["recall"]:.4f}")
+        print(f"F1 Score: {testcase["f1"]:.4f}")
+        print(f"Relevant: {testcase["relevant_docs"]}")
+        print(f"Retrieved: {testcase["retrieved_docs"]}\n")
