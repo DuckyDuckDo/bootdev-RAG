@@ -74,7 +74,7 @@ class HybridSearch:
         """
         return 1 / (rank + k)
 
-    def rrf_search(self, query, k, limit=10, rerank = False):
+    def rrf_search(self, query, k, limit=10, rerank = False, evaluate = False):
         """
         Performs hybrid search but with the reciprocal rank fusion (RRF) metric to order scores instead of normalization. 
         Returns an [] of {} with top search results
@@ -117,7 +117,12 @@ class HybridSearch:
         
         if rerank == "cross_encoder":
             results = cross_encoder_rerank_results(query, results)
-
+        
+        # evaluate flag is on, perform the LLM evaluation
+        if evaluate:
+            llm_scores = llm_evaluate_results(query, results)
+            for i, movie in enumerate(results[:limit]):
+                movie["llm_score"] = llm_scores[i]
 
         return results[:limit]
 
@@ -148,12 +153,12 @@ def weighted_search_command(query, alpha = 0.5, limit = 5):
         print(f"Hybrid Score: {movie_data["hybrid"]:.4f}")
         print(f"BM25: {movie_data["BM25"]:.4f}, Semantic: {movie_data["Semantic"]:.4f}")
     
-def rrf_search_command(query, k = 60, limit = 5, rerank = False):
+def rrf_search_command(query, k = 60, limit = 5, rerank = False, evaluate = False):
     with open(DATA_PATH, "r") as f:
         data = json.load(f)
         movies = data["movies"]
     hybrid_search = HybridSearch(movies)
-    top_search_results = hybrid_search.rrf_search(query, k, limit, rerank)
+    top_search_results = hybrid_search.rrf_search(query, k, limit, rerank, evaluate)
     return top_search_results
 
 def format_rrf_results(rrf_results):
@@ -269,6 +274,7 @@ def batch_rerank_results(query, rrf_results):
                     }}
                     """
     )
+
     cleaned_response = response.text.strip().strip("```")[5:] # Clean the JSON response from Gemini API
     rankings = json.loads(cleaned_response)['data']
     ranking_map = {key: i for i, key in enumerate(rankings)}
@@ -345,3 +351,38 @@ def format_eval_results(eval_results, limit):
         print(f"F1 Score: {testcase["f1"]:.4f}")
         print(f"Relevant: {testcase["relevant_docs"]}")
         print(f"Retrieved: {testcase["retrieved_docs"]}\n")
+
+def llm_evaluate_results(query, rrf_results):
+    """
+    Takes the rrf_results from RRF search and uses Gemini AI to process and evaluate the search results in comparison to the query
+    """
+    client = genai.Client(api_key = API_KEY)
+    response = client.models.generate_content(
+        model = "gemini-2.0-flash-001", 
+        contents = f"""Rate how relevant each result is to this query on a 0-3 scale:
+
+            Query: "{query}"
+            Results: An array of dictionaries representing the search results along with the relevant meta data
+            {rrf_results}
+            Scale:
+            - 3: Highly relevant
+            - 2: Relevant
+            - 1: Marginally relevant
+            - 0: Not relevant
+
+            Do NOT give any numbers out than 0, 1, 2, or 3.
+
+            Ensure every movie in rrf_results gets a rating from 0-3. The returned JSON list should be of same length as movies in rrf_results.
+
+            Return ONLY the scores in the same order you were given the documents. Return a valid JSON list, nothing else. For example:
+
+            [2, 0, 3, 2, 0, 1]"""
+    )
+
+    cleaned_response = response.text.strip().strip("```")[5:] # Clean the JSON response from Gemini API
+    scores = json.loads(cleaned_response)
+    return scores
+
+def format_llm_evaluated_results(rrf_results):
+    for i, movie_data in enumerate(rrf_results):
+        print(f"{i+1}. {movie_data["title"]}: {movie_data["llm_score"]}/3")

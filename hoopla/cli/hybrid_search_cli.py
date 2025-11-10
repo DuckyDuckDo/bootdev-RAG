@@ -30,6 +30,7 @@ def main() -> None:
         choices=["individual", "batch", "cross_encoder"],
         help="LLM Rerank Method",
     )
+    rrf_parser.add_argument("--evaluate", action = "store_true", help = "If flag is present, have LLM evaluate results against the given query after rrf-search")
 
     args = parser.parse_args()
 
@@ -42,7 +43,6 @@ def main() -> None:
 
         case "rrf-search":
             method = args.enhance
-            rerank_method = args.rerank_method
             # Based on different ways to enhance search query, perform different AI calls/functions
             # Then performs the rrf_search on the new query
             match method:
@@ -64,8 +64,11 @@ def main() -> None:
                 case _:
                     enhanced_query = args.query
             
-            rrf_results = rrf_search_command(enhanced_query, args.k, args.limit, rerank_method)
-            format_rrf_results(rrf_results)
+            rrf_results = rrf_search_command(enhanced_query, args.k, args.limit, args.rerank_method, args.evaluate)
+            if not args.evaluate:
+                format_rrf_results(rrf_results)
+            else:
+                format_llm_evaluated_results(rrf_results)
         
         case _:
             parser.print_help()
