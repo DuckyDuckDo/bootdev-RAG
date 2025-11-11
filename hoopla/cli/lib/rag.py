@@ -16,7 +16,7 @@ def rag(query):
     top_search_results = hybrid_search.rrf_search(query, limit = 10)
     
     client = genai.Client(api_key = API_KEY)
-    prompt = prompt = f"""
+    prompt = f"""
         Answer the question or provide information based on the provided documents. 
         This should be tailored to Hoopla users. Hoopla is a movie streaming service
         Query: {query}
