@@ -74,7 +74,7 @@ class HybridSearch:
         """
         return 1 / (rank + k)
 
-    def rrf_search(self, query, k, limit=10, rerank = False, evaluate = False):
+    def rrf_search(self, query, k = 60, limit=10, rerank = False, evaluate = False):
         """
         Performs hybrid search but with the reciprocal rank fusion (RRF) metric to order scores instead of normalization. 
         Returns an [] of {} with top search results
