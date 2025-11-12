@@ -10,5 +10,5 @@ Retrieval Augmented Generation Project
     - For now this is hardcoded in as the query passed to the LLM will be the same one passed into the search engine
 - Finally, explores multimodal search capabilities by providing relevant movie recommendations based on a user image input. 
 
-Integrate with LLM through Gemini API and use the retrieval mechanisms to implement a RAG
+Integrate with LLM through Gemini API and use the retrieval mechanisms to implement a RAG that is capable of summarization of movies, question answering of movies, and more context informed suggestion of movies based on user query. 
 
