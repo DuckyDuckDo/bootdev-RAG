@@ -2,6 +2,21 @@ import argparse
 from lib.hybrid_search import *
 import mimetypes
 from google.genai import types
+from PIL import Image
+from sentence_transformers import SentenceTransformer
+
+# Class that will perform multimodal search equipped with model for Image to Embedding space
+class MultimodalSearch():
+    def __init__(self, model_name = "clip-ViT-B-32"):
+        self.model = SentenceTransformer(model_name)
+    
+    def embed_image(self, image_path):
+        """
+        Given an input image_path, returns an output embedding based on the model declared in constructor
+        """
+        image_data = Image.open(image_path)
+        image_embedding = self.model.encode([image_data])[0]
+        return image_embedding
 
 
 ###### COMMANDS FROM describe_image CLI and multimodal_search 
@@ -39,3 +54,11 @@ def describe_image(image_path, query):
     print(f"Rewritten query: {response.text.strip()}")
     if response.usage_metadata is not None:
         print(f"Total tokens:    {response.usage_metadata.total_token_count}")
+    
+def verify_image_embedding(image_path):
+    """
+    Command called to check if our multimodal search model can verify image embedding
+    """
+    model = MultimodalSearch()
+    image_embedding = model.embed_image(image_path)
+    print(f"Embedding shape: {image_embedding.shape[0]} dimensions")
