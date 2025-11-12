@@ -1,5 +1,6 @@
 import argparse
 from lib.hybrid_search import *
+from lib.semantic_search import *
 import mimetypes
 from google.genai import types
 from PIL import Image
@@ -7,8 +8,14 @@ from sentence_transformers import SentenceTransformer
 
 # Class that will perform multimodal search equipped with model for Image to Embedding space
 class MultimodalSearch():
-    def __init__(self, model_name = "clip-ViT-B-32"):
+    def __init__(self, documents, model_name = "clip-ViT-B-32"):
         self.model = SentenceTransformer(model_name)
+        self.documents = documents
+        self.texts = [
+            f"{doc["title"]}: {doc["description"]}"
+            for doc in self.documents
+        ]
+        self.text_embeddings = self.model.encode(self.texts, show_progress_bar = True)
     
     def embed_image(self, image_path):
         """
@@ -18,6 +25,32 @@ class MultimodalSearch():
         image_embedding = self.model.encode([image_data])[0]
         return image_embedding
 
+    def search_with_image(self, image_path, limit = 5):
+        """
+        Given an image_path, we get the embedding of the image and perform cosine similarity with all the text embeddings
+        """
+        search_results = [] # list of dicts containing document_ID, title, description, similarity score    
+        image_embedding = self.embed_image(image_path)
+        similarity_scores = []
+
+        for doc in self.documents:
+            similarity_scores.append((cosine_similarity(image_embedding, self.text_embeddings[doc['id'] - 1]), doc)) # - 1 b/c doc ids start indexed at 1 and not 0
+
+            # Grab the top_x_scores
+        top_x_scores = sorted(similarity_scores, key = lambda x: x[0], reverse = True)
+        final_result = []
+        
+        # Build out the final result
+        for score, doc in top_x_scores:
+            if len(final_result) >= limit:
+                break
+            final_result.append({
+                                'id': doc['id'], 
+                                'score': score, 
+                                'title': doc['title'], 
+                                'description': doc['description']
+                                 })
+        return final_result
 
 ###### COMMANDS FROM describe_image CLI and multimodal_search 
 def describe_image(image_path, query):
@@ -62,3 +95,17 @@ def verify_image_embedding(image_path):
     model = MultimodalSearch()
     image_embedding = model.embed_image(image_path)
     print(f"Embedding shape: {image_embedding.shape[0]} dimensions")
+
+def image_search_command(image_path, limit = 5):
+    """
+    Command to be called from CLI that loads movies and creates MultiModalSearch instance to do search with image based on
+    images and text being embedded on the same vector space
+    """
+    with open(DATA_PATH, "r") as f:
+        data = json.load(f)
+        movies = data["movies"]
+    model = MultimodalSearch(movies)
+    top_search_results = model.search_with_image(image_path, limit)
+
+    for movie in top_search_results:
+        print(f"{movie["title"]} (similarity: {movie["score"]:.3f})")
